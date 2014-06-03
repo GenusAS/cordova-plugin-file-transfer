@@ -44,14 +44,15 @@ module.exports = {
             storageFile.openAsync(Windows.Storage.FileAccessMode.read).then(function (stream) {
                 var blob = MSApp.createBlobFromRandomAccessStream(storageFile.contentType, stream);
                 var formData = new FormData();
-                formData.append("source\";filename=\"" + storageFile.name + "\"", blob);
+                // formData.append("source\";filename=\"" + storageFile.name + "\"", blob);
+                formData.append(storageFile.name, blob, storageFile.name);
                 WinJS.xhr({ type: "POST", url: server, data: formData, headers: headers }).then(function (response) {
                     var code = response.status;
                     storageFile.getBasicPropertiesAsync().done(function (basicProperties) {
 
                         Windows.Storage.FileIO.readBufferAsync(storageFile).done(function (buffer) {
                             var dataReader = Windows.Storage.Streams.DataReader.fromBuffer(buffer);
-                            var fileContent = dataReader.readString(buffer.length);
+                            var fileContent = dataReader.readBuffer(buffer.length);
                             dataReader.close();
                             var ftResult = new FileUploadResult(basicProperties.size, code, fileContent);
                             // for now we explicitly write the bytesSent,responseCode,result 
