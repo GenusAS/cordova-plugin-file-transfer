@@ -191,7 +191,7 @@ __Parameters__:
         uri,
         fileURL,
         function(entry) {
-            console.log("download complete: " + entry.fullPath);
+            console.log("download complete: " + entry.toURL());
         },
         function(error) {
             console.log("download error source " + error.source);
@@ -249,13 +249,14 @@ A `FileTransferError` object is passed to an error callback when an error occurs
 - __target__: URL to the target. (String)
 
 - __http_status__: HTTP status code.  This attribute is only available when a response code is received from the HTTP connection. (Number)
+- __exception__: Either e.getMessage or e.toString (String)
 
 ### Constants
 
-- `FileTransferError.FILE_NOT_FOUND_ERR`
-- `FileTransferError.INVALID_URL_ERR`
-- `FileTransferError.CONNECTION_ERR`
-- `FileTransferError.ABORT_ERR`
+- 1 = `FileTransferError.FILE_NOT_FOUND_ERR`
+- 2 = `FileTransferError.INVALID_URL_ERR`
+- 3 = `FileTransferError.CONNECTION_ERR`
+- 4 = `FileTransferError.ABORT_ERR`
 
 ## Backwards Compatibility Notes
 
