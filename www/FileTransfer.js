@@ -224,6 +224,55 @@ FileTransfer.prototype.download = function(source, target, successCallback, erro
     exec(win, fail, 'FileTransfer', 'download', [source, target, trustAllHosts, this._id, headers]);
 };
 
+FileTransfer.prototype.downloadWithFilePicker = function (source, fileName, successCallback, errorCallback, trustAllHosts, options) {
+    argscheck.checkArgs('ssFF*', 'FileTransfer.download', arguments);
+    var self = this;
+
+    var basicAuthHeader = getBasicAuthHeader(source);
+    if (basicAuthHeader) {
+        source = source.replace(getUrlCredentials(source) + '@', '');
+
+        options = options || {};
+        options.headers = options.headers || {};
+        options.headers[basicAuthHeader.name] = basicAuthHeader.value;
+    }
+
+    var headers = null;
+    if (options) {
+        headers = options.headers || null;
+    }
+
+    var win = function (result) {
+        if (typeof result.lengthComputable != "undefined") {
+            if (self.onprogress) {
+                return self.onprogress(newProgressEvent(result));
+            }
+        } else if (successCallback) {
+            var entry = null;
+            if (result.isDirectory) {
+                entry = new (require('org.apache.cordova.file.DirectoryEntry'))();
+            }
+            else if (result.isFile) {
+                entry = new (require('org.apache.cordova.file.FileEntry'))();
+            }
+            entry.isDirectory = result.isDirectory;
+            entry.isFile = result.isFile;
+            entry.name = result.name;
+            entry.fullPath = result.fullPath;
+            entry.filesystem = new FileSystem(result.filesystemName || (result.filesystem == window.PERSISTENT ? 'persistent' : 'temporary'));
+            entry.nativeURL = result.nativeURL;
+            successCallback(entry);
+        }
+    };
+
+    var fail = errorCallback && function (e) {
+        var error = new FileTransferError(e.code, e.source, e.fileName, e.http_status, e.body, e.exception);
+        errorCallback(error);
+    };
+
+    exec(win, fail, 'FileTransfer', 'downloadWithFilePicker', [source, fileName, trustAllHosts, this._id, headers]);
+};
+
 /**
  * Aborts the ongoing file transfer on this object. The original error
  * callback for the file transfer will be called if necessary.

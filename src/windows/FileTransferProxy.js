@@ -403,7 +403,136 @@ exec(win, fail, 'FileTransfer', 'upload',
             }
         });
     },
+    // [source, fileName, trustAllHosts, id, headers]
+    downloadWithFilePicker: function (successCallback, errorCallback, options) {
+        var source = options[0];
+        var fileName = options[1];
+        var downloadId = options[3];
+        var headers = options[4] || {};
 
+        var a = fileName.split(".");
+        if( a.length === 1 || ( a[0] === "" && a.length === 2 ) ) {
+            return "";
+        }
+        fileName = a.pop()
+
+        // // Create internal download operation object
+        fileTransferOps[downloadId] = new FileTransferOperation(FileTransferOperation.PENDING, null);
+
+        //     storageFolder.createFileAsync(fileName, Windows.Storage.CreationCollisionOption.replaceExisting).then(function(storageFile) {
+        var fileSavePicker = new Windows.Storage.Pickers.FileSavePicker();
+        fileSavePicker.suggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.downloads;
+        // Dropdown of file types the user can save the file as
+        
+        fileSavePicker.fileTypeChoices.insert("File", [fileExtension]);
+        // Default file name if the user does not type one in or select a file to replace
+        fileSavePicker.suggestedFileName = fileName;
+        fileSavePicker.pickSaveFileAsync().then(function (storageFile) {
+            // check if download isn't already cancelled
+            var downloadOp = fileTransferOps[downloadId];
+            if (downloadOp && downloadOp.state === FileTransferOperation.CANCELLED) {
+                // Here we should call errorCB with ABORT_ERR error
+                errorCallback(new FTErr(FTErr.ABORT_ERR, source, fileName));
+                return;
+            }
+
+            // if download isn't cancelled, contunue with creating and preparing download operation
+            var downloader = new Windows.Networking.BackgroundTransfer.BackgroundDownloader();
+            for (var header in headers) {
+                if (headers.hasOwnProperty(header)) {
+                    downloader.setRequestHeader(header, headers[header]);
+                }
+            }
+
+            // create download object. This will throw an exception if URL is malformed
+            try {
+                var uri = Windows.Foundation.Uri(source);
+                download = downloader.createDownload(uri, storageFile);
+            } catch (e) {
+                // so we handle this and call errorCallback
+                errorCallback(new FTErr(FTErr.INVALID_URL_ERR));
+                return;
+            }
+
+            // Adds storagefile to futureAccessList to make sure it can be accessed later by the app
+            if (storageFile) {
+                var listToken = Windows.Storage.AccessCache.StorageApplicationPermissions.futureAccessList.add(storageFile);
+            }
+
+            var downloadOperation = download.startAsync();
+            // update internal TransferOperation object with newly created promise
+            fileTransferOps[downloadId].promise = downloadOperation;
+
+            downloadOperation.then(function () {
+
+                // Update TransferOperation object with new state, delete promise property
+                // since it is not actual anymore
+                var currentDownloadOp = fileTransferOps[downloadId];
+                if (currentDownloadOp) {
+                    currentDownloadOp.state = FileTransferOperation.DONE;
+                    currentDownloadOp.promise = null;
+                }
+
+                var nativeURI = storageFile.path.replace(/\\/g, '/');
+
+                // Passing null as error callback here because downloaded file should exist in any case
+                // otherwise the error callback will be hit during file creation in another place
+                FileProxy.resolveLocalFileSystemURI(successCallback, null, [nativeURI]);
+            }, function (error) {
+
+                var getTransferError = new WinJS.Promise(function (resolve) {
+                    // Handle download error here. If download was cancelled,
+                    // message property will be specified
+                    if (error.message === 'Canceled') {
+                        resolve(new FTErr(FTErr.ABORT_ERR, source, fileName, null, null, error));
+                    } else {
+                        // in the other way, try to get response property
+                        var response = download.getResponseInformation();
+                        if (!response) {
+                            resolve(new FTErr(FTErr.CONNECTION_ERR, source, fileName));
+                        } else {
+                            var reader = new Windows.Storage.Streams.DataReader(download.getResultStreamAt(0));
+                            reader.loadAsync(download.progress.bytesReceived).then(function (bytesLoaded) {
+                                var payload = reader.readString(bytesLoaded);
+                                resolve(new FTErr(FTErr.FILE_NOT_FOUND_ERR, source, fileName, response.statusCode, payload, error));
+                            });
+                        }
+                    }
+                });
+                getTransferError.then(function (fileTransferError) {
+
+                    // Update TransferOperation object with new state, delete promise property
+                    // since it is not actual anymore
+                    var currentDownloadOp = fileTransferOps[downloadId];
+                    if (currentDownloadOp) {
+                        currentDownloadOp.state = FileTransferOperation.CANCELLED;
+                        currentDownloadOp.promise = null;
+                    }
+
+                    // Cleanup, remove incompleted file
+                    storageFile.deleteAsync().then(function () {
+                        errorCallback(fileTransferError);
+                    });
+                });
+
+            }, function (evt) {
+
+                var progressEvent = new ProgressEvent('progress', {
+                    loaded: evt.progress.bytesReceived,
+                    total: evt.progress.totalBytesToReceive,
+                    target: evt.resultFile
+                });
+                // when bytesReceived == 0, BackgroundDownloader has not yet differentiated whether it could get file length or not,
+                // when totalBytesToReceive == 0, BackgroundDownloader is unable to get file length
+                progressEvent.lengthComputable = (evt.progress.bytesReceived > 0) && (evt.progress.totalBytesToReceive > 0);
+
+                successCallback(progressEvent, { keepCallback: true });
+            });
+        }, function (error) {
+            errorCallback(new FTErr(FTErr.FILE_NOT_FOUND_ERR, source, fileName, null, null, error));
+        });
+        
+    },
     abort: function (successCallback, error, options) {
         var fileTransferOpId = options[0];
 
