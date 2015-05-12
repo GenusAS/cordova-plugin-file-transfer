@@ -410,16 +410,17 @@ exec(win, fail, 'FileTransfer', 'upload',
         var downloadId = options[3];
         var headers = options[4] || {};
 
+        var fileExtension
         var a = fileName.split(".");
-        if( a.length === 1 || ( a[0] === "" && a.length === 2 ) ) {
-            return "";
+        if (a.length === 1 || (a[0] === "" && a.length === 2)) {
+            fileExtension = ".";
+        } else {
+            fileExtension = "."+ a.pop();
         }
-        fileName = a.pop()
 
         // // Create internal download operation object
         fileTransferOps[downloadId] = new FileTransferOperation(FileTransferOperation.PENDING, null);
 
-        //     storageFolder.createFileAsync(fileName, Windows.Storage.CreationCollisionOption.replaceExisting).then(function(storageFile) {
         var fileSavePicker = new Windows.Storage.Pickers.FileSavePicker();
         fileSavePicker.suggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.downloads;
         // Dropdown of file types the user can save the file as
@@ -428,6 +429,15 @@ exec(win, fail, 'FileTransfer', 'upload',
         // Default file name if the user does not type one in or select a file to replace
         fileSavePicker.suggestedFileName = fileName;
         fileSavePicker.pickSaveFileAsync().then(function (storageFile) {
+
+            // Adds storagefile to futureAccessList to make sure it can be accessed later by the app
+            if (storageFile) {
+                var listToken = Windows.Storage.AccessCache.StorageApplicationPermissions.futureAccessList.add(storageFile);
+            } else {
+                errorCallback(new FTErr(FTErr.ABORT_ERR, source, fileName));
+                return;
+            }
+            
             // check if download isn't already cancelled
             var downloadOp = fileTransferOps[downloadId];
             if (downloadOp && downloadOp.state === FileTransferOperation.CANCELLED) {
