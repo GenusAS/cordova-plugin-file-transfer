@@ -227,10 +227,10 @@ FileTransfer.prototype.downloadWithFilePicker = function (source, fileName, succ
         } else if (successCallback) {
             var entry = null;
             if (result.isDirectory) {
-                entry = new (require('org.apache.cordova.file.DirectoryEntry'))();
+                entry = new (require('cordova-plugin-file.DirectoryEntry'))();
             }
             else if (result.isFile) {
-                entry = new (require('org.apache.cordova.file.FileEntry'))();
+                entry = new (require('cordova-plugin-file.FileEntry'))();
             }
             entry.isDirectory = result.isDirectory;
             entry.isFile = result.isFile;
