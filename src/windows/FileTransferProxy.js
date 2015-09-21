@@ -448,6 +448,37 @@ exec(win, fail, 'FileTransfer', 'upload',
                 }
             }
 
+            // If creating the download fails, check if the source is local and copy the file instead
+            if (source.indexOf("ms-appdata:") === 0) {
+                var uri = Windows.Foundation.Uri(source);
+                Windows.Storage.StorageFile.getFileFromApplicationUriAsync(uri).done(
+
+                    function (sourceFile) {
+
+                        sourceFile.copyAndReplaceAsync(storageFile).done(
+                            function () {
+                                
+                                console.log("Success");
+                                var nativeURI = storageFile.path.replace(/\\/g, '/');
+                                FileProxy.resolveLocalFileSystemURI(successCallback, null, [nativeURI]);
+                            },
+                            function (e) {
+                                
+                                console.log("Error");
+                                errorCallback(e);
+                            }
+                        )
+
+                    },
+                    function (e) {
+                        errorCallback(new FTErr(FTErr.INVALID_URL_ERR));
+                        return;
+                    }
+                )
+
+                // Return here to prevent the rest of the code from running - not needed when copying file from local 
+                return;
+            }
             // create download object. This will throw an exception if URL is malformed
             try {
                 var uri = Windows.Foundation.Uri(source);
